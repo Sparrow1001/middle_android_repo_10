@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -36,31 +37,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import ru.yandex.buggyweatherapp.model.WeatherData
 import ru.yandex.buggyweatherapp.utils.WeatherIconMapper
 import ru.yandex.buggyweatherapp.viewmodel.WeatherViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WeatherScreen(viewModel: WeatherViewModel, modifier: Modifier = Modifier) {
+fun WeatherScreen(
+    viewModel: WeatherViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier
+) {
     
     val context = LocalContext.current
-    
-    
+
     DisposableEffect(Unit) {
-        
-        viewModel.initialize(context)
-        
         onDispose {
             
         }
     }
     
-    
     val weatherData by viewModel.weatherData.observeAsState()
     val isLoading by viewModel.isLoading.observeAsState(false)
     val error by viewModel.error.observeAsState()
-    val cityName by viewModel.cityName.observeAsState("")
+    val cityName by viewModel.cityNameState.collectAsState()
     
     var searchText by remember { mutableStateOf("") }
     
@@ -108,7 +108,7 @@ fun WeatherScreen(viewModel: WeatherViewModel, modifier: Modifier = Modifier) {
         weatherData?.let { weather ->
             WeatherCard(
                 weather = weather,
-                cityName = cityName,
+                cityName = cityName ?: "Unknown",
                 onFavoriteClick = { viewModel.toggleFavorite() },
                 onRefreshClick = { viewModel.fetchCurrentLocationWeather() }
             )

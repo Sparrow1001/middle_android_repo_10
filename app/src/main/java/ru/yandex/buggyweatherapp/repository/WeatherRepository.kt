@@ -2,71 +2,69 @@ package ru.yandex.buggyweatherapp.repository
 
 import android.util.Log
 import com.google.gson.JsonObject
-import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import ru.yandex.buggyweatherapp.api.RetrofitInstance
+import ru.yandex.buggyweatherapp.api.WeatherApiService
 import ru.yandex.buggyweatherapp.model.Location
 import ru.yandex.buggyweatherapp.model.WeatherData
-import java.util.Date
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class WeatherRepository {
-    
-    
-    private val weatherApi = RetrofitInstance.weatherApi
-    
+/*
+- подключение hilt
+- замена callback на корутины
+- результат через Result
+ */
+
+@Singleton
+class WeatherRepository @Inject constructor(
+    private val weatherApi: WeatherApiService
+) : IWeatherRepository {
     
     private var cachedWeatherData: WeatherData? = null
-    
-    
-    fun getWeatherData(location: Location, callback: (WeatherData?, Exception?) -> Unit) {
-        
-        val call = weatherApi.getCurrentWeather(location.latitude, location.longitude)
-        
-        
-        try {
-            
-            val response = call.execute()
-            
-            if (response.isSuccessful) {
-                val weatherData = parseWeatherData(response.body()!!, location)
-                cachedWeatherData = weatherData
-                callback(weatherData, null)
-            } else {
-                
-                callback(null, Exception("API Error: ${response.code()}"))
+
+    override suspend fun getWeatherData(location: Location): Result<WeatherData> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = weatherApi.getCurrentWeather(location.latitude, location.longitude)
+                if (response.isSuccessful) {
+                    val weatherData = parseWeatherData(response.body()!!, location)
+                    cachedWeatherData = weatherData
+                    Result.success(weatherData)
+                } else {
+                    Result.failure(Exception("API Error: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Log.e("WeatherRepository", "Error fetching weather", e)
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            
-            Log.e("WeatherRepository", "Error fetching weather", e)
-            callback(null, e)
         }
-    }
-    
-    fun getWeatherByCity(cityName: String, callback: (WeatherData?, Exception?) -> Unit) {
-        weatherApi.getWeatherByCity(cityName).enqueue(object : Callback<JsonObject> {
-            override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
+
+
+    override suspend fun getWeatherByCity(cityName: String): Result<WeatherData> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = weatherApi.getWeatherByCity(cityName)
                 if (response.isSuccessful && response.body() != null) {
                     try {
                         val json = response.body()!!
                         val location = extractLocationFromResponse(json)
                         val weatherData = parseWeatherData(json, location)
-                        callback(weatherData, null)
+                        Result.success(weatherData)
                     } catch (e: Exception) {
-                        
-                        callback(null, e)
+                        Result.failure(e)
                     }
                 } else {
-                    callback(null, Exception("Error fetching weather data"))
+                    Result.failure(Exception("Error fetching weather data"))
                 }
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-            
-            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                callback(null, Exception(t))
-            }
-        })
-    }
+        }
+
     
     
     private fun parseWeatherData(json: JsonObject, location: Location): WeatherData {
